@@ -41,3 +41,14 @@ def test_implementations_agree():
         regular_result = blake3_universal_hash(key, message)
         cli_result = blake3_universal_hash_cli(key, message)
         assert regular_result == cli_result, f"length {length}"
+
+
+def test_xor_parts():
+    key = secrets.token_bytes(blake3.key_size)
+    message = secrets.token_bytes(1000)
+    left_len = 512  # must be a multiple of 64
+    left_part = message[:512]
+    right_part = message[512:]
+    left_hash = blake3_universal_hash(key, left_part)
+    right_hash = blake3_universal_hash(key, right_part, counter=left_len // 64)
+    assert blake3_universal_hash_cli(key, message) == _xor(left_hash, right_hash)
