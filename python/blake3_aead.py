@@ -58,9 +58,9 @@ def blake3_universal_hash_cli(
 def test_implementations_agree():
     from secrets import token_bytes
 
-    for i in range(100):
+    for length in [0, 1, 64, 65, 128, 1000]:
         key = token_bytes(blake3.key_size)
-        message = token_bytes(i)
+        message = token_bytes(length)
         regular_result = blake3_universal_hash(key, message)
         cli_result = blake3_universal_hash_cli(key, message)
-        assert regular_result == cli_result
+        assert regular_result == cli_result, f"length {length}"
