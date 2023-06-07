@@ -1,4 +1,7 @@
 from blake3 import blake3
+from hmac import compare_digest
+
+TAG_LEN = 16
 
 
 def _xor(a: bytes, b: bytes):
@@ -38,3 +41,36 @@ def blake3_universal_hash(
         result = _xor(result, block_output)
         position += blake3.block_size
     return result
+
+
+def blake3_aead_encrypt(
+    key: bytes, nonce: bytes, plaintext: bytes, aad: bytes | None = None
+) -> bytes:
+    stream = blake3(nonce, key=key).digest(length=blake3.block_size + len(plaintext))
+    message_auth_key = stream[0:32]
+    aad_auth_key = stream[32:64]
+    masked_plaintext = _xor(plaintext, stream[blake3.block_size :])
+    tag = blake3_universal_hash(message_auth_key, masked_plaintext)[:TAG_LEN]
+    if aad:
+        tag = _xor(tag, blake3_universal_hash(aad_auth_key, aad)[:TAG_LEN])
+    return masked_plaintext + tag[:TAG_LEN]
+
+
+def blake3_aead_decrypt(
+    key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes | None = None
+) -> bytes:
+    plaintext_len = len(ciphertext) - TAG_LEN
+    masked_plaintext = ciphertext[:plaintext_len]
+    tag = ciphertext[plaintext_len:]
+    stream = blake3(nonce, key=key).digest(length=blake3.block_size + plaintext_len)
+    message_auth_key = stream[0:32]
+    aad_auth_key = stream[32:64]
+    expected_tag = blake3_universal_hash(message_auth_key, masked_plaintext)[:TAG_LEN]
+    if aad:
+        expected_tag = _xor(
+            expected_tag, blake3_universal_hash(aad_auth_key, aad)[:TAG_LEN]
+        )
+    if not compare_digest(expected_tag[:TAG_LEN], tag):
+        raise ValueError("invalid ciphertext")
+    plaintext = _xor(masked_plaintext, stream[blake3.block_size :])
+    return plaintext

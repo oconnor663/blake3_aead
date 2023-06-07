@@ -1,5 +1,11 @@
 from blake3 import blake3
-from blake3_aead import blake3_universal_hash, _xor
+from blake3_aead import (
+    blake3_aead_encrypt,
+    blake3_aead_decrypt,
+    blake3_universal_hash,
+    _xor,
+    TAG_LEN,
+)
 from tempfile import NamedTemporaryFile
 import secrets
 import subprocess
@@ -52,3 +58,20 @@ def test_xor_parts():
     left_hash = blake3_universal_hash(key, left_part)
     right_hash = blake3_universal_hash(key, right_part, block_counter=left_len // 64)
     assert blake3_universal_hash_cli(key, message) == _xor(left_hash, right_hash)
+
+
+def test_aead_round_trip():
+    key = secrets.token_bytes(blake3.key_size)
+    message = secrets.token_bytes(100)
+    aad = secrets.token_bytes(100)
+    nonce = secrets.token_bytes(12)
+    ciphertext = blake3_aead_encrypt(key, nonce, message, aad)
+    assert len(ciphertext) == len(message) + TAG_LEN
+    decrypted = blake3_aead_decrypt(key, nonce, ciphertext, aad)
+    assert message == decrypted
+    try:
+        blake3_aead_decrypt(key, nonce, ciphertext)
+    except ValueError:
+        pass
+    else:
+        assert False, "changing the AAD should fail decryption"
