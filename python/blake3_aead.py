@@ -7,7 +7,7 @@ def _xor(a: bytes, b: bytes):
 
 
 def blake3_universal_hash(
-    one_time_key: bytes, message: bytes, counter: int = 0
+    one_time_key: bytes, message: bytes, *, block_counter: int = 0
 ) -> bytes:
     """EXPERIMENTAL! This is a low-level, "hazmat" building block for AEAD
     ciphers. Applications that need to authenticate messages should prefer the
@@ -20,12 +20,11 @@ def blake3_universal_hash(
     for better parallelism at short message lengths. The 64-byte return value
     is intended to be truncated according to the required security level.
 
-    The optional counter argument can be used hash messages in parts, by using
-    the same key for each part and setting the counter to each part's starting
-    block index (i.e. byte offset / 64). The parts must be split at 64-byte
-    block boundaries. The XOR of the hashes of the parts gives the hash of the
-    whole message.
-    """
+    The optional block_counter argument can be used hash messages in parts, by
+    using the same key for each part and setting the counter to each part's
+    starting block index (i.e. byte offset / 64). The parts must be split at
+    64-byte block boundaries. The XOR of the hashes of the parts gives the hash
+    of the whole message."""
     result = bytearray(blake3.block_size)
     position = 0
     while position == 0 or position < len(message):
@@ -33,7 +32,7 @@ def blake3_universal_hash(
             message[position : position + blake3.block_size],
             key=one_time_key,
         ).digest(
-            seek=blake3.block_size * counter + position,
+            seek=blake3.block_size * block_counter + position,
             length=64,
         )
         result = _xor(result, block_output)

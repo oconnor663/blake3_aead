@@ -6,7 +6,7 @@ import subprocess
 
 
 def blake3_universal_hash_cli(
-    one_time_key: bytes, message: bytes, counter: int = 0
+    one_time_key: bytes, message: bytes, *, block_counter: int = 0
 ) -> bytes:
     result = bytearray(blake3.block_size)
     position = 0
@@ -14,7 +14,7 @@ def blake3_universal_hash_cli(
         with NamedTemporaryFile() as f:
             f.write(message[position : position + blake3.block_size])
             f.flush()
-            seek = blake3.block_size * counter + position
+            seek = blake3.block_size * block_counter + position
             block_output = subprocess.run(
                 [
                     "b3sum",
@@ -50,5 +50,5 @@ def test_xor_parts():
     left_part = message[:512]
     right_part = message[512:]
     left_hash = blake3_universal_hash(key, left_part)
-    right_hash = blake3_universal_hash(key, right_part, counter=left_len // 64)
+    right_hash = blake3_universal_hash(key, right_part, block_counter=left_len // 64)
     assert blake3_universal_hash_cli(key, message) == _xor(left_hash, right_hash)
