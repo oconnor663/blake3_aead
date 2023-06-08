@@ -12,7 +12,10 @@ def _xor(a: bytes, b: bytes):
 
 
 def blake3_universal_hash(
-    one_time_key: bytes, message: bytes, *, block_counter: int = 0
+    one_time_key: bytes,
+    message: bytes,
+    *,
+    block_counter: int = 0,
 ) -> bytes:
     """EXPERIMENTAL! This is a low-level, "hazmat" building block for AEAD
     ciphers. Applications that need to authenticate messages should prefer the
@@ -46,11 +49,13 @@ def blake3_universal_hash(
 
 
 def blake3_aead_encrypt(
-    key: bytes, nonce: bytes, plaintext: bytes, aad: bytes | None = None
+    key: bytes,
+    nonce: bytes,
+    plaintext: bytes,
+    aad: bytes = b"",
 ) -> bytes:
     stream = blake3(nonce, key=key).digest(length=blake3.block_size + len(plaintext))
     message_auth_key = stream[0:32]
-    aad_auth_key = stream[32:64]
     masked_plaintext = _xor(plaintext, stream[blake3.block_size :])
     tag = blake3_universal_hash(message_auth_key, masked_plaintext)
     if aad:
@@ -60,14 +65,16 @@ def blake3_aead_encrypt(
 
 
 def blake3_aead_decrypt(
-    key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes | None = None
+    key: bytes,
+    nonce: bytes,
+    ciphertext: bytes,
+    aad: bytes = b"",
 ) -> bytes:
     plaintext_len = len(ciphertext) - TAG_LEN
     masked_plaintext = ciphertext[:plaintext_len]
     tag = ciphertext[plaintext_len:]
     stream = blake3(nonce, key=key).digest(length=blake3.block_size + plaintext_len)
     message_auth_key = stream[0:32]
-    aad_auth_key = stream[32:64]
     expected_tag = blake3_universal_hash(message_auth_key, masked_plaintext)
     if aad:
         expected_aad_tag = blake3_universal_hash(
