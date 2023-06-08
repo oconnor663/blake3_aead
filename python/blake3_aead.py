@@ -12,7 +12,7 @@ def _xor(a: bytes, b: bytes):
 
 
 def blake3_universal_hash(
-    one_time_key: bytes,
+    key: bytes,
     message: bytes,
     *,
     block_counter: int = 0,
@@ -22,7 +22,8 @@ def blake3_universal_hash(
     standard BLAKE3 keyed hash.
 
     blake3_universal_hash is spiritually similar to GCM/GHASH and Poly1305, and
-    in NaCl/libsodium terms we could call this blake3_onetimeauth. Compared to
+    in NaCl/libsodium terms we could call this blake3_onetimeauth. Security is
+    generally lost if you publish two outputs using the same key. Compared to
     standard keyed BLAKE3, blake3_universal_hash sacrifices collision
     resistance, second-preimage resistance, key reuse, and extendable output
     for better parallelism at short message lengths. The 64-byte return value
@@ -38,7 +39,7 @@ def blake3_universal_hash(
     while position == 0 or position < len(message):
         block_output = blake3(
             message[position : position + blake3.block_size],
-            key=one_time_key,
+            key=key,
         ).digest(
             seek=blake3.block_size * block_counter + position,
             length=64,
