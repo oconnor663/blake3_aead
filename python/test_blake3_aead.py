@@ -1,8 +1,8 @@
 from blake3 import blake3
 from blake3_aead import (
-    blake3_aead_encrypt,
-    blake3_aead_decrypt,
-    blake3_universal_hash,
+    encrypt,
+    decrypt,
+    universal_hash,
     _xor,
     TAG_LEN,
 )
@@ -11,7 +11,7 @@ import secrets
 import subprocess
 
 
-def blake3_universal_hash_cli(
+def universal_hash_cli(
     one_time_key: bytes,
     message: bytes,
     block_counter: int,
@@ -46,8 +46,8 @@ def test_implementations_agree():
     for length in [0, 1, 64, 65, 128, 1000]:
         key = secrets.token_bytes(blake3.key_size)
         message = secrets.token_bytes(length)
-        regular_result = blake3_universal_hash(key, message, 42)
-        cli_result = blake3_universal_hash_cli(key, message, 42)
+        regular_result = universal_hash(key, message, 42)
+        cli_result = universal_hash_cli(key, message, 42)
         assert regular_result == cli_result, f"length {length}"
 
 
@@ -57,9 +57,9 @@ def test_xor_parts():
     left_len = 512  # must be a multiple of 64
     left_part = message[:512]
     right_part = message[512:]
-    left_hash = blake3_universal_hash(key, left_part, 0)
-    right_hash = blake3_universal_hash(key, right_part, left_len // 64)
-    assert blake3_universal_hash(key, message, 0) == _xor(left_hash, right_hash)
+    left_hash = universal_hash(key, left_part, 0)
+    right_hash = universal_hash(key, right_part, left_len // 64)
+    assert universal_hash(key, message, 0) == _xor(left_hash, right_hash)
 
 
 def test_aead_round_trip():
@@ -69,15 +69,15 @@ def test_aead_round_trip():
         for aad_len in [0, 1, 64, 1000]:
             message = secrets.token_bytes(msg_len)
             aad = secrets.token_bytes(aad_len)
-            ciphertext = blake3_aead_encrypt(key, nonce, message, aad)
+            ciphertext = encrypt(key, nonce, message, aad)
             assert len(ciphertext) == len(message) + TAG_LEN
-            decrypted = blake3_aead_decrypt(key, nonce, ciphertext, aad)
+            decrypted = decrypt(key, nonce, ciphertext, aad)
             assert message == decrypted
 
             # Test decryption failure.
             bad_aad = secrets.token_bytes(32)
             try:
-                blake3_aead_decrypt(key, nonce, ciphertext, bad_aad)
+                decrypt(key, nonce, ciphertext, bad_aad)
             except ValueError:
                 pass
             else:

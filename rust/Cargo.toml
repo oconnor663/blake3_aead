@@ -1,0 +1,15 @@
+[package]
+name = "blake3_aead"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["std"]
+std = ["blake3/std"]
+
+[dependencies]
+blake3 = "1.4.0"
+constant_time_eq = "0.2.5"
+
+[dev-dependencies]
+hex = "0.4.3"
