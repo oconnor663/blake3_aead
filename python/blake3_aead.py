@@ -58,12 +58,14 @@ def blake3_aead_encrypt(
 ) -> bytes:
     stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN)
     masked_plaintext = _xor(plaintext, stream[: len(plaintext)])
-    tag = blake3_universal_hash(key, masked_plaintext, MSG_HASH_COUNTER)
+    tag = stream[len(plaintext) :]
+    if plaintext:
+        msg_tag = blake3_universal_hash(key, masked_plaintext, MSG_HASH_COUNTER)
+        tag = _xor(tag, msg_tag[:TAG_LEN])
     if aad:
         aad_tag = blake3_universal_hash(key, aad, AAD_HASH_COUNTER)
-        tag = _xor(tag, aad_tag)
-    masked_tag = _xor(tag[:TAG_LEN], stream[len(plaintext) :])
-    return masked_plaintext + masked_tag
+        tag = _xor(tag, aad_tag[:TAG_LEN])
+    return masked_plaintext + tag
 
 
 def blake3_aead_decrypt(
@@ -74,14 +76,14 @@ def blake3_aead_decrypt(
 ) -> bytes:
     plaintext_len = len(ciphertext) - TAG_LEN
     masked_plaintext = ciphertext[:plaintext_len]
-    masked_tag = ciphertext[plaintext_len:]
+    tag = ciphertext[plaintext_len:]
     stream = blake3(nonce, key=key).digest(length=plaintext_len + TAG_LEN)
-    tag = _xor(masked_tag, stream[plaintext_len:])
-    expected_tag = blake3_universal_hash(key, masked_plaintext, MSG_HASH_COUNTER)
+    if plaintext_len:
+        msg_tag = blake3_universal_hash(key, masked_plaintext, MSG_HASH_COUNTER)
+        tag = _xor(tag, msg_tag[:TAG_LEN])
     if aad:
-        expected_aad_tag = blake3_universal_hash(key, aad, AAD_HASH_COUNTER)
-        expected_tag = _xor(expected_tag, expected_aad_tag)
-    if not compare_digest(expected_tag[:TAG_LEN], tag):
+        aad_tag = blake3_universal_hash(key, aad, AAD_HASH_COUNTER)
+        tag = _xor(tag, aad_tag[:TAG_LEN])
+    if not compare_digest(tag, stream[plaintext_len:]):
         raise ValueError("invalid ciphertext")
-    plaintext = _xor(masked_plaintext, stream[:plaintext_len])
-    return plaintext
+    return _xor(masked_plaintext, stream[:plaintext_len])

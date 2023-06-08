@@ -64,16 +64,21 @@ def test_xor_parts():
 
 def test_aead_round_trip():
     key = secrets.token_bytes(blake3.key_size)
-    message = secrets.token_bytes(100)
-    aad = secrets.token_bytes(100)
     nonce = secrets.token_bytes(12)
-    ciphertext = blake3_aead_encrypt(key, nonce, message, aad)
-    assert len(ciphertext) == len(message) + TAG_LEN
-    decrypted = blake3_aead_decrypt(key, nonce, ciphertext, aad)
-    assert message == decrypted
-    try:
-        blake3_aead_decrypt(key, nonce, ciphertext)
-    except ValueError:
-        pass
-    else:
-        assert False, "changing the AAD should fail decryption"
+    for msg_len in [0, 1, 64, 1000]:
+        for aad_len in [0, 1, 64, 1000]:
+            message = secrets.token_bytes(msg_len)
+            aad = secrets.token_bytes(aad_len)
+            ciphertext = blake3_aead_encrypt(key, nonce, message, aad)
+            assert len(ciphertext) == len(message) + TAG_LEN
+            decrypted = blake3_aead_decrypt(key, nonce, ciphertext, aad)
+            assert message == decrypted
+
+            # Test decryption failure.
+            bad_aad = secrets.token_bytes(32)
+            try:
+                blake3_aead_decrypt(key, nonce, ciphertext, bad_aad)
+            except ValueError:
+                pass
+            else:
+                assert False, "changing the AAD should fail decryption"
