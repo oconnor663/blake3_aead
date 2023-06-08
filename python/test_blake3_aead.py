@@ -12,7 +12,9 @@ import subprocess
 
 
 def blake3_universal_hash_cli(
-    one_time_key: bytes, message: bytes, *, block_counter: int = 0
+    one_time_key: bytes,
+    message: bytes,
+    block_counter: int,
 ) -> bytes:
     result = bytearray(blake3.block_size)
     position = 0
@@ -44,8 +46,8 @@ def test_implementations_agree():
     for length in [0, 1, 64, 65, 128, 1000]:
         key = secrets.token_bytes(blake3.key_size)
         message = secrets.token_bytes(length)
-        regular_result = blake3_universal_hash(key, message)
-        cli_result = blake3_universal_hash_cli(key, message)
+        regular_result = blake3_universal_hash(key, message, 42)
+        cli_result = blake3_universal_hash_cli(key, message, 42)
         assert regular_result == cli_result, f"length {length}"
 
 
@@ -55,9 +57,9 @@ def test_xor_parts():
     left_len = 512  # must be a multiple of 64
     left_part = message[:512]
     right_part = message[512:]
-    left_hash = blake3_universal_hash(key, left_part)
-    right_hash = blake3_universal_hash(key, right_part, block_counter=left_len // 64)
-    assert blake3_universal_hash_cli(key, message) == _xor(left_hash, right_hash)
+    left_hash = blake3_universal_hash(key, left_part, 0)
+    right_hash = blake3_universal_hash(key, right_part, left_len // 64)
+    assert blake3_universal_hash(key, message, 0) == _xor(left_hash, right_hash)
 
 
 def test_aead_round_trip():

@@ -2,8 +2,10 @@ from blake3 import blake3
 from hmac import compare_digest
 
 TAG_LEN = 16
-AAD_INITIAL_SEEK = 1 << 63
-AAD_INITIAL_COUNTER = AAD_INITIAL_SEEK // blake3.block_size
+MSG_HASH_SEEK = 1 << 63
+MSG_HASH_COUNTER = MSG_HASH_SEEK // blake3.block_size
+AAD_HASH_SEEK = (1 << 63) + (1 << 62)
+AAD_HASH_COUNTER = AAD_HASH_SEEK // blake3.block_size
 
 
 def _xor(a: bytes, b: bytes):
@@ -14,8 +16,7 @@ def _xor(a: bytes, b: bytes):
 def blake3_universal_hash(
     key: bytes,
     message: bytes,
-    *,
-    block_counter: int = 0,
+    block_counter: int,
 ) -> bytes:
     """EXPERIMENTAL! This is a low-level, "hazmat" building block for AEAD
     ciphers. Applications that need to authenticate messages should prefer the
@@ -55,14 +56,14 @@ def blake3_aead_encrypt(
     plaintext: bytes,
     aad: bytes = b"",
 ) -> bytes:
-    stream = blake3(nonce, key=key).digest(length=blake3.block_size + len(plaintext))
-    message_auth_key = stream[0:32]
-    masked_plaintext = _xor(plaintext, stream[blake3.block_size :])
-    tag = blake3_universal_hash(message_auth_key, masked_plaintext)
+    stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN)
+    masked_plaintext = _xor(plaintext, stream[: len(plaintext)])
+    tag = blake3_universal_hash(key, masked_plaintext, MSG_HASH_COUNTER)
     if aad:
-        aad_tag = blake3_universal_hash(key, aad, block_counter=AAD_INITIAL_COUNTER)
+        aad_tag = blake3_universal_hash(key, aad, AAD_HASH_COUNTER)
         tag = _xor(tag, aad_tag)
-    return masked_plaintext + tag[:TAG_LEN]
+    masked_tag = _xor(tag[:TAG_LEN], stream[len(plaintext) :])
+    return masked_plaintext + masked_tag
 
 
 def blake3_aead_decrypt(
@@ -73,16 +74,14 @@ def blake3_aead_decrypt(
 ) -> bytes:
     plaintext_len = len(ciphertext) - TAG_LEN
     masked_plaintext = ciphertext[:plaintext_len]
-    tag = ciphertext[plaintext_len:]
-    stream = blake3(nonce, key=key).digest(length=blake3.block_size + plaintext_len)
-    message_auth_key = stream[0:32]
-    expected_tag = blake3_universal_hash(message_auth_key, masked_plaintext)
+    masked_tag = ciphertext[plaintext_len:]
+    stream = blake3(nonce, key=key).digest(length=plaintext_len + TAG_LEN)
+    tag = _xor(masked_tag, stream[plaintext_len:])
+    expected_tag = blake3_universal_hash(key, masked_plaintext, MSG_HASH_COUNTER)
     if aad:
-        expected_aad_tag = blake3_universal_hash(
-            key, aad, block_counter=AAD_INITIAL_COUNTER
-        )
+        expected_aad_tag = blake3_universal_hash(key, aad, AAD_HASH_COUNTER)
         expected_tag = _xor(expected_tag, expected_aad_tag)
     if not compare_digest(expected_tag[:TAG_LEN], tag):
         raise ValueError("invalid ciphertext")
-    plaintext = _xor(masked_plaintext, stream[blake3.block_size :])
+    plaintext = _xor(masked_plaintext, stream[:plaintext_len])
     return plaintext
