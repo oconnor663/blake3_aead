@@ -6,6 +6,7 @@ use core::cmp;
 
 const BLOCK_LEN: usize = 64;
 const TAG_LEN: usize = 16;
+const MAX_NONCE_LEN: usize = BLOCK_LEN;
 
 const MSG_HASH_SEEK: u64 = 1 << 63;
 const MSG_HASH_COUNTER: u64 = MSG_HASH_SEEK / BLOCK_LEN as u64;
@@ -71,6 +72,12 @@ pub fn encrypt_in_place(
     aad: &[u8],
 ) {
     assert!(plaintext_with_tag_space.len() >= TAG_LEN);
+    // Supporting nonces larger than 64 bytes would be trivial for any implementation that includes
+    // the full BLAKE3 hash, as this one does. However, not all implementations need the hash
+    // function. A compact implementation might prefer to work directly with the compression
+    // function and omit the tree hashing parts. Restricting nonces to 64 bytes allows for these
+    // compact implementations, while still leaving plenty of space for random nonces.
+    assert!(nonce.len() <= MAX_NONCE_LEN);
     // Zero the last TAG_LEN bytes, in case there's garbage there.
     let plaintext_len = plaintext_with_tag_space.len() - TAG_LEN;
     for i in 0..TAG_LEN {
@@ -113,7 +120,7 @@ pub fn decrypt_in_place<'msg>(
     ciphertext: &'msg mut [u8],
     aad: &[u8],
 ) -> Result<&'msg mut [u8], ()> {
-    if ciphertext.len() < TAG_LEN {
+    if ciphertext.len() < TAG_LEN || nonce.len() > MAX_NONCE_LEN {
         return Err(());
     }
     // Zero the last TAG_LEN bytes, in case there's garbage there.

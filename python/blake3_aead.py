@@ -2,6 +2,8 @@ from blake3 import blake3
 from hmac import compare_digest
 
 TAG_LEN = 16
+MAX_NONCE_LEN = blake3.block_size
+
 MSG_HASH_SEEK = 1 << 63
 MSG_HASH_COUNTER = MSG_HASH_SEEK // blake3.block_size
 AAD_HASH_SEEK = (1 << 63) + (1 << 62)
@@ -56,6 +58,14 @@ def encrypt(
     plaintext: bytes,
     aad: bytes = b"",
 ) -> bytes:
+    # Supporting nonces larger than 64 bytes would be trivial for any
+    # implementation that includes the full BLAKE3 hash, as this one does.
+    # However, not all implementations need the hash function. A compact
+    # implementation might prefer to work directly with the compression
+    # function and omit the tree hashing parts. Restricting nonces to 64 bytes
+    # allows for these compact implementations, while still leaving plenty of
+    # space for random nonces.
+    assert len(nonce) <= MAX_NONCE_LEN
     stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN)
     masked_plaintext = _xor(plaintext, stream[: len(plaintext)])
     tag = stream[len(plaintext) :]
@@ -74,6 +84,7 @@ def decrypt(
     ciphertext: bytes,
     aad: bytes = b"",
 ) -> bytes:
+    assert len(nonce) <= MAX_NONCE_LEN
     plaintext_len = len(ciphertext) - TAG_LEN
     masked_plaintext = ciphertext[:plaintext_len]
     tag = ciphertext[plaintext_len:]
