@@ -78,7 +78,7 @@ key = sys.argv[1].encode("ascii")
 nonce = sys.argv[2].encode("ascii")
 plaintext = bytes.fromhex(sys.argv[3])
 aad = bytes.fromhex(sys.argv[4])
-output = blake3_aead.encrypt(key, nonce, plaintext, aad)
+output = blake3_aead.encrypt(key, nonce, aad, plaintext)
 sys.stdout.buffer.write(output)
 "#;
     for msg_len in [0, 1, 64, 1000] {
@@ -96,11 +96,11 @@ sys.stdout.buffer.write(output)
             let python_output = run_python_script(PYTHON_SCRIPT, args);
             let mut ciphertext = plaintext.clone();
             ciphertext.resize(plaintext.len() + 16, 0u8);
-            blake3_aead::encrypt_in_place(TEST_KEY, TEST_NONCE, &mut ciphertext, &aad);
+            blake3_aead::encrypt_in_place(TEST_KEY, TEST_NONCE, &aad, &mut ciphertext);
             assert_eq!(python_output, ciphertext);
             #[cfg(feature = "std")]
             {
-                let ciphertext_vec = blake3_aead::encrypt(TEST_KEY, TEST_NONCE, &plaintext, &aad);
+                let ciphertext_vec = blake3_aead::encrypt(TEST_KEY, TEST_NONCE, &aad, &plaintext);
                 assert_eq!(python_output, ciphertext_vec);
             }
         }

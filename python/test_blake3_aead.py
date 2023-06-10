@@ -3,7 +3,8 @@ from blake3_aead import (
     encrypt,
     decrypt,
     universal_hash,
-    _xor,
+    xor,
+    BLOCK_LEN,
     TAG_LEN,
 )
 from tempfile import NamedTemporaryFile
@@ -16,13 +17,13 @@ def universal_hash_cli(
     message: bytes,
     block_counter: int,
 ) -> bytes:
-    result = bytearray(blake3.block_size)
-    position = 0
-    while position == 0 or position < len(message):
+    result = bytes(TAG_LEN)
+    for i in range(0, len(message), BLOCK_LEN):
         with NamedTemporaryFile() as f:
-            f.write(message[position : position + blake3.block_size])
+            block = message[i : i + BLOCK_LEN]
+            f.write(block)
             f.flush()
-            seek = blake3.block_size * block_counter + position
+            seek = BLOCK_LEN * block_counter + i
             block_output = subprocess.run(
                 [
                     "b3sum",
@@ -30,15 +31,14 @@ def universal_hash_cli(
                     "--keyed",
                     "--raw",
                     "--length",
-                    str(blake3.block_size),
+                    str(TAG_LEN),
                     "--seek",
                     str(seek),
                 ],
                 input=one_time_key,
                 stdout=subprocess.PIPE,
             ).stdout
-            result = _xor(result, block_output)
-            position += blake3.block_size
+            result = xor(result, block_output)
     return result
 
 
@@ -59,7 +59,7 @@ def test_xor_parts():
     right_part = message[512:]
     left_hash = universal_hash(key, left_part, 0)
     right_hash = universal_hash(key, right_part, left_len // 64)
-    assert universal_hash(key, message, 0) == _xor(left_hash, right_hash)
+    assert universal_hash(key, message, 0) == xor(left_hash, right_hash)
 
 
 def test_aead_round_trip():
@@ -69,9 +69,9 @@ def test_aead_round_trip():
         for aad_len in [0, 1, 64, 1000]:
             message = secrets.token_bytes(msg_len)
             aad = secrets.token_bytes(aad_len)
-            ciphertext = encrypt(key, nonce, message, aad)
+            ciphertext = encrypt(key, nonce, aad, message)
             assert len(ciphertext) == len(message) + TAG_LEN
-            decrypted = decrypt(key, nonce, ciphertext, aad)
+            decrypted = decrypt(key, nonce, aad, ciphertext)
             assert message == decrypted
 
             # Test decryption failure.
