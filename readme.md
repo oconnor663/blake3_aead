@@ -13,42 +13,44 @@ hash function*
 
 - Nonces can be up to 64 bytes.
 - Relatively large maximum message and AAD lengths: 2<sup>62</sup> bytes
-- The plaintext and the associated data can both be processed incrementally,
-  without knowing their lengths in advance, in either order or in parallel.
-- Truncating the auth tag to n bits retains the expected O(2<sup>n</sup>) bits
-  of security.
-- A compact implementation could work directly with the BLAKE3 compression
+- The message and associated data can be processed in either order or in
+  parallel, without knowing their lengths in advance, in one pass.
+- Truncating the auth tag to N bits retains the expected O(2<sup>N</sup>) bits
+  of security. (Correct?)
+- A compact implementation can work directly with the BLAKE3 compression
   function and omit the tree hashing parts.
 
 ### Sharp edges
 
 - Unique nonces are the caller's responsibility.
 - Nonce reuse is catastrophic for security.
-- Decryption needs to buffer the entire message.
+- Decryption has to either buffer the entire message or handle unauthenticated
+  plaintext.
 - No key commitment
 
 Aside: All of these downsides are in common with AES-GCM and ChaCha20-Poly1305.
-These ciphers prioritize bytes on the wire and short-message performance above
-all else, and in my opinion that makes them "hazmat" building blocks for
-experts only. BLAKE3-AEAD isn't about changing that. For a different design
-that _is_ about changing that, see
+These TLS-oriented ciphers prioritize bytes on the wire and short-message
+performance above all else, and in my opinion that makes them "hazmat" building
+blocks, for experts only. BLAKE3-AEAD aims for the same use case and makes the
+same tradeoffs. For a more general-purpose design with fewer sharp edges, see
 [Bessie](https://github.com/oconnor663/bessie).
 
 ### Design
 
 #### Some BLAKE3 background
 
-There are two important features of BLAKE3 that get used heavily in this
-design. First, BLAKE3 has a built-in keyed mode. It works by substituting the
-caller's key in place of the standard IV, and crucially that means it doesn't
-require any extra compressions.
+This design relies on two features of BLAKE3 in particular. First, BLAKE3 has a
+built-in keyed mode. This works by substituting the caller's key in place of
+the standard IV, and it doesn't require any extra compressions.
 
 Second, BLAKE3 supports extendable output. The blocks of the extended output
-stream are produced by incrementing the internal `t` parameter to the
-compression function, which lets the caller compute blocks in parallel or
-"seek" to any block in constant time. This parallelism makes the extended
-output suitable as a stream cipher, and the range of the `t` parameter is large
-enough that we can use the high bits for zero-overhead domain separation.
+stream are produced by incrementing the compression function's internal `t`
+parameter, which lets the caller compute blocks in parallel and seek to any
+block in constant time. That parallelism makes the extended output useful as a
+stream cipher, and it also benefits the "universal hash" construction below.
+The range of the `t` parameter is large enough that we can use the high bits
+for zero-overhead domain separation between the stream, the message
+authenticator, and the associated data authenticator.
 
 #### Universal hash
 
@@ -67,7 +69,6 @@ def universal_hash(key, message, initial_block_counter):
 
 ```python
 def encrypt(key, nonce, aad, plaintext):
-    assert len(nonce) <= MAX_NONCE_LEN
     stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN)
     ciphertext_msg = xor(plaintext, stream[: len(plaintext)])
     msg_tag = universal_hash(key, ciphertext_msg, MSG_HASH_COUNTER)
