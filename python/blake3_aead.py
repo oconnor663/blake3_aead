@@ -3,16 +3,7 @@ from hmac import compare_digest
 
 TAG_LEN = 16
 BLOCK_LEN = blake3.block_size
-
-# Supporting nonces larger than 64 bytes would be trivial for any
-# implementation that's built on a BLAKE3 library. However, not all
-# implementations need the full hash function. A compact implementation might
-# prefer to work directly with the compression function and omit the tree
-# hashing parts. Restricting nonces to 64 bytes allows for these compact
-# implementations, and 64 bytes is already generous. For comparison, the
-# extended nonces in XSalsa and XChaCha are 24 bytes.
 MAX_NONCE_LEN = BLOCK_LEN
-
 MSG_SEEK = 2**63
 AAD_SEEK = 2**63 + 2**62
 

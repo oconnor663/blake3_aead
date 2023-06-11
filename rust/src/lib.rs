@@ -1,19 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use blake3::KEY_LEN;
+pub use blake3::KEY_LEN;
 use constant_time_eq::constant_time_eq;
 
+pub const TAG_LEN: usize = 16;
 const BLOCK_LEN: usize = 64;
-const TAG_LEN: usize = 16;
-
-// Supporting nonces larger than 64 bytes would be trivial for any implementation that's built on a
-// BLAKE3 library. However, not all implementations need the full hash function. A compact
-// implementation might prefer to work directly with the compression function and omit the tree
-// hashing parts. Restricting nonces to 64 bytes allows for these compact implementations, and 64
-// bytes is already generous. For comparison, the extended nonces in XSalsa and XChaCha are 24
-// bytes.
 const MAX_NONCE_LEN: usize = BLOCK_LEN;
-
 const MSG_SEEK: u64 = 1 << 63;
 const AAD_SEEK: u64 = (1 << 63) + (1 << 62);
 
@@ -49,7 +41,7 @@ pub fn universal_hash(key: &[u8; KEY_LEN], message: &[u8], initial_seek: u64) ->
     return output;
 }
 
-/// `plaintext_and_tag` contains the plaintext plus TAG_LEN extra bytes at the end. The plaintext
+/// `plaintext_and_tag` contains the plaintext plus `TAG_LEN` extra bytes at the end. The plaintext
 /// is encrypted in-place, and the auth tag is written to the extra bytes. The initial contents of
 /// the extra bytes are ignored.
 pub fn encrypt_in_place(
@@ -84,7 +76,7 @@ pub fn encrypt(key: &[u8; KEY_LEN], nonce: &[u8], aad: &[u8], plaintext: &[u8]) 
 
 /// The plaintext length is `ciphertext.len() - 16`, and it will be decrypted in-place at the front
 /// of `ciphertext`. If authentication succeeds, this function returns the plaintext as a slice. If
-/// authentication fails, or if the ciphertext is shorter than TAG_LEN, it returns `Err(())`.
+/// authentication fails, or if the ciphertext is shorter than `TAG_LEN`, it returns `Err(())`.
 pub fn decrypt_in_place<'msg>(
     key: &[u8; KEY_LEN],
     nonce: &[u8],
