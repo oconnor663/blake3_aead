@@ -20,9 +20,9 @@ def universal_hash(
 ) -> bytes:
     assert initial_seek % BLOCK_LEN == 0
     output = bytes(TAG_LEN)
-    for i in range(0, len(message), BLOCK_LEN):
-        block = message[i : i + BLOCK_LEN]
-        seek = initial_seek + i
+    for block_start in range(0, len(message), BLOCK_LEN):
+        block = message[block_start : block_start + BLOCK_LEN]
+        seek = initial_seek + block_start
         block_output = blake3(block, key=key).digest(length=TAG_LEN, seek=seek)
         output = xor(output, block_output)
     return output

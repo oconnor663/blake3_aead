@@ -33,9 +33,9 @@ fn xof_xor(output: &mut blake3::OutputReader, dest: &mut [u8]) {
 pub fn universal_hash(key: &[u8; KEY_LEN], message: &[u8], initial_seek: u64) -> [u8; TAG_LEN] {
     debug_assert_eq!(0, initial_seek % BLOCK_LEN as u64);
     let mut output = [0u8; TAG_LEN];
-    for (i, block) in message.chunks(BLOCK_LEN).enumerate() {
+    for (block_index, block) in message.chunks(BLOCK_LEN).enumerate() {
         let mut xof = blake3::Hasher::new_keyed(key).update(block).finalize_xof();
-        xof.set_position(initial_seek + (i * BLOCK_LEN) as u64);
+        xof.set_position(initial_seek + (block_index * BLOCK_LEN) as u64);
         xof_xor(&mut xof, &mut output);
     }
     return output;
