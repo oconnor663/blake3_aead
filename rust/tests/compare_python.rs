@@ -4,7 +4,6 @@ use std::process::{Command, Stdio};
 
 const TEST_KEY: &[u8; 32] = b"whats the Elvish word for friend";
 const TEST_NONCE: &[u8; 12] = b"foobarbazboo";
-const MAX_BLOCK_COUNTER: u64 = (-64i64) as u64 / 64;
 
 fn test_input(len: usize) -> Vec<u8> {
     let mut buf = vec![0u8; len];
@@ -45,22 +44,22 @@ import sys
 assert len(sys.argv) == 4, "three args expected"
 key = sys.argv[1].encode("ascii")
 message = bytes.fromhex(sys.argv[2])
-block_counter = int(sys.argv[3])
-output = blake3_aead.universal_hash(key, message, block_counter)
+initial_seek = int(sys.argv[3])
+output = blake3_aead.universal_hash(key, message, initial_seek)
 sys.stdout.buffer.write(output)
 "#;
     for len in [0, 1, 64, 1000] {
         dbg!(len);
-        for block_counter in [0, 1, MAX_BLOCK_COUNTER - len as u64 / 64] {
-            dbg!(block_counter);
+        for initial_seek in [0, 64, (1 << 60)] {
+            dbg!(initial_seek);
             let message = test_input(len);
             let args = vec![
                 String::from_utf8(TEST_KEY.to_vec()).unwrap(),
                 hex::encode(&message),
-                format!("{block_counter}"),
+                format!("{initial_seek}"),
             ];
             let python_output = run_python_script(PYTHON_SCRIPT, args);
-            let rust_output = blake3_aead::universal_hash(TEST_KEY, &message, block_counter);
+            let rust_output = blake3_aead::universal_hash(TEST_KEY, &message, initial_seek);
             assert_eq!(python_output, rust_output);
         }
     }
