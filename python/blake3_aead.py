@@ -28,13 +28,13 @@ def universal_hash(
     initial_seek: int,
 ) -> bytes:
     assert initial_seek % BLOCK_LEN == 0
-    result = bytes(TAG_LEN)
+    output = bytes(TAG_LEN)
     for i in range(0, len(message), BLOCK_LEN):
         block = message[i : i + BLOCK_LEN]
         seek = initial_seek + i
         block_output = blake3(block, key=key).digest(length=TAG_LEN, seek=seek)
-        result = xor(result, block_output)
-    return result
+        output = xor(output, block_output)
+    return output
 
 
 def encrypt(
@@ -61,11 +61,10 @@ def decrypt(
     assert len(nonce) <= MAX_NONCE_LEN
     plaintext_len = len(ciphertext) - TAG_LEN
     ciphertext_msg = ciphertext[:plaintext_len]
-    tag = ciphertext[plaintext_len:]
     stream = blake3(nonce, key=key).digest(length=plaintext_len + TAG_LEN)
     msg_tag = universal_hash(key, ciphertext_msg, MSG_SEEK)
     aad_tag = universal_hash(key, aad, AAD_SEEK)
     expected_tag = xor(stream[plaintext_len:], xor(msg_tag, aad_tag))
-    if not compare_digest(expected_tag, tag):
+    if not compare_digest(expected_tag, ciphertext[plaintext_len:]):
         raise ValueError("invalid ciphertext")
     return xor(ciphertext_msg, stream[:plaintext_len])
