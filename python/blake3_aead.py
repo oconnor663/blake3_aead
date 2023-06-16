@@ -52,7 +52,7 @@ def decrypt(
     assert len(nonce) <= MAX_NONCE_LEN
     plaintext_len = len(ciphertext) - TAG_LEN
     ciphertext_msg = ciphertext[:plaintext_len]
-    stream = blake3(nonce, key=key).digest(length=plaintext_len + TAG_LEN)
+    stream = blake3(nonce, key=key).digest(length=len(ciphertext))
     msg_tag = universal_hash(key, ciphertext_msg, MSG_SEEK)
     aad_tag = universal_hash(key, aad, AAD_SEEK)
     expected_tag = xor(stream[plaintext_len:], xor(msg_tag, aad_tag))
