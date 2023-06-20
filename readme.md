@@ -5,8 +5,8 @@ hash function*
 
 ## Primary goals
 
-- A drop-in replacement for AES-GCM in TLS-like use cases
-- Maximum performance
+- Drop-in replacement for AES-GCM in TLS-like use cases
+- High performance for short messages (~1 KiB)
 - Defined in terms of the standard BLAKE3 API
 
 ## Nice-to-have features
