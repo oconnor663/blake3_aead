@@ -1,6 +1,12 @@
 [package]
 name = "blake3_aead"
 version = "0.1.0"
+authors = ["Jack O'Connor <oconnor663@gmail.com>"]
+description = "an experimental authenticated cipher"
+repository = "https://github.com/oconnor663/blake3_aead"
+license = "CC0-1.0 OR Apache-2.0"
+documentation = "https://docs.rs/blake3_aead"
+readme = "../readme.md"
 edition = "2021"
 
 [features]
