@@ -11,7 +11,7 @@ AAD_AUTH_SEEK = 2**62
 STREAM_SEEK = 2**63
 
 
-def xor(a: bytes, b: bytes):
+def xor(a: bytes, b: bytes) -> bytes:
     assert len(a) == len(b)
     return bytes(x ^ y for x, y in zip(a, b))
 

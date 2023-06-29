@@ -41,7 +41,7 @@ def universal_hash_cli(
     return result
 
 
-def test_implementations_agree():
+def test_implementations_agree() -> None:
     for length in [0, 1, 64, 65, 128, 1000]:
         key = secrets.token_bytes(blake3.key_size)
         message = secrets.token_bytes(length)
@@ -50,7 +50,7 @@ def test_implementations_agree():
         assert regular_result == cli_result, f"length {length}"
 
 
-def test_xor_parts():
+def test_xor_parts() -> None:
     key = secrets.token_bytes(blake3.key_size)
     message = secrets.token_bytes(1000)
     left_len = 512  # must be a multiple of 64
@@ -59,7 +59,7 @@ def test_xor_parts():
     assert universal_hash(key, message, 0) == xor(left_tag, right_tag)
 
 
-def test_aead_round_trip():
+def test_aead_round_trip() -> None:
     key = secrets.token_bytes(blake3.key_size)
     nonce = secrets.token_bytes(12)
     for msg_len in [0, 1, 64, 1000]:
