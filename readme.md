@@ -109,7 +109,7 @@ def encrypt(key, nonce, aad, plaintext):
 
 The BLAKE3 XOF supports up to 2<sup>64</sup>-1 output bytes. The output space
 is divided into three parts, with the message authenticator starting at offset
-0, the AD authenticator starting at offset 2<sup>62</sup>, and the key stream
+0, the AD authenticator starting at offset 2<sup>62</sup>, and the keystream
 starting at offset 2<sup>63</sup>. The stream cipher produces 16 extra bytes of
 output beyond the message length, and those extra bytes are used to mask the
 combined authentication tag.
@@ -135,7 +135,7 @@ def decrypt(key, nonce, aad, ciphertext):
 
 Broadly speaking there are two options for constructing the authenticator:
 
-- Compute it with the long-term key and mask it with the key stream (what this
+- Compute it with the long-term key and mask it with the keystream (what this
   design does).
 - Compute it with a nonce-derived key and publish it unmasked.
 
@@ -163,8 +163,8 @@ compression function for the AAD when it's empty.
 
 ### Misuse resistance
 
-It could've been nice to incorporate the MAC of the plaintext into the key
-stream, to provide some resistance against nonce reuse. But that has
+It could've been nice to incorporate the MAC of the plaintext into the
+keystream, to provide some resistance against nonce reuse. But that has
 performance downsides: Encryption would require two passes over the input, and
 the recipient would have to do all the work of decryption before rejecting a
 bad packet.
@@ -172,10 +172,10 @@ bad packet.
 ### Seek constants
 
 We could've divided the XOF output space into three approximately equal parts,
-rather than the current arrangement where half of it is allocated to the key
-stream. However, increasing the maximum message size from 2<sup>62</sup> bytes
-to ~2<sup>62.4</sup> bytes has almost no practical value, and it's nicer to
-keep the `MSG_AUTH_SEEK` and `AAD_AUTH_SEEK` constants simple.
+rather than the current arrangement where half of it is allocated to the
+keystream. However, increasing the maximum message size from 2<sup>62</sup>
+bytes to ~2<sup>62.4</sup> bytes has almost no practical value, and it's nicer
+to keep the constants simple.
 
 It doesn't matter very much which component uses seek 0 and which components
 use larger values, but choosing `MSG_AUTH_SEEK`=0 and `STREAM_SEEK`=2<sup>63</sup>
@@ -190,14 +190,13 @@ has some minor benefits:
   that the cipher considers secret, they'll probably publish outputs from seek
   0. It's _slightly_ harder to exploit accidental leaks of the message
   authenticator (which has pseudorandom input) than it is to exploit leaks of
-  the AD authenticator or the key stream, so it's preferable to put the message
+  the AD authenticator or the keystream, so it's preferable to put the message
   authenticator at seek 0.
 - There are implementations of BLAKE3 that support the XOF but don't support
-  seeking. If the key stream was at seek 0, a programmer who only needed to get
+  seeking. If the keystream was at seek 0, a programmer who only needed to get
   decryption working might be tempted to ignore the auth tag, as a shortcut to
   avoid switching to a different BLAKE3 implementation. Putting the keystream
   higher in the output space removes this temptation.
-
 
 ### Nonce length
 
