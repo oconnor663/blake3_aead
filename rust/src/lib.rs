@@ -6,6 +6,7 @@ use constant_time_eq::constant_time_eq;
 pub const TAG_LEN: usize = 16;
 const BLOCK_LEN: usize = 64;
 const MAX_NONCE_LEN: usize = BLOCK_LEN;
+const MAX_MSG_LEN: u64 = 1 << 62;
 
 const MSG_AUTH_SEEK: u64 = 0;
 const AAD_AUTH_SEEK: u64 = 1 << 62;
@@ -54,10 +55,12 @@ pub fn encrypt_in_place(
     aad: &[u8],
     plaintext_and_tag: &mut [u8],
 ) {
-    assert!(plaintext_and_tag.len() >= TAG_LEN);
     assert!(nonce.len() <= MAX_NONCE_LEN);
-    // Zero the last TAG_LEN bytes, so that we don't xof_xor over garbage.
+    assert!(aad.len() as u64 <= MAX_MSG_LEN);
+    assert!(plaintext_and_tag.len() >= TAG_LEN);
     let plaintext_len = plaintext_and_tag.len() - TAG_LEN;
+    assert!(plaintext_len as u64 <= MAX_MSG_LEN);
+    // Zero the last TAG_LEN bytes, so that we don't xof_xor over garbage.
     for i in 0..TAG_LEN {
         plaintext_and_tag[plaintext_len + i] = 0;
     }
@@ -87,10 +90,19 @@ pub fn decrypt_in_place<'msg>(
     aad: &[u8],
     ciphertext: &'msg mut [u8],
 ) -> Result<&'msg mut [u8], ()> {
-    if ciphertext.len() < TAG_LEN || nonce.len() > MAX_NONCE_LEN {
+    if nonce.len() > MAX_NONCE_LEN {
+        return Err(());
+    }
+    if aad.len() as u64 > MAX_MSG_LEN {
+        return Err(());
+    }
+    if ciphertext.len() < TAG_LEN {
         return Err(());
     }
     let plaintext_len = ciphertext.len() - TAG_LEN;
+    if plaintext_len as u64 > MAX_MSG_LEN {
+        return Err(());
+    }
     let mut tag = universal_hash(key, &ciphertext[..plaintext_len], MSG_AUTH_SEEK);
     let aad_tag = universal_hash(key, aad, AAD_AUTH_SEEK);
     xor(&mut tag, &aad_tag);

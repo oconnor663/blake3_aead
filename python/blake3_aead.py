@@ -4,6 +4,7 @@ from hmac import compare_digest
 TAG_LEN = 16
 BLOCK_LEN = blake3.block_size
 MAX_NONCE_LEN = BLOCK_LEN
+MAX_MSG_LEN = 2**62
 
 MSG_AUTH_SEEK = 0
 AAD_AUTH_SEEK = 2**62
@@ -37,6 +38,8 @@ def encrypt(
     plaintext: bytes,
 ) -> bytes:
     assert len(nonce) <= MAX_NONCE_LEN
+    assert len(aad) <= MAX_MSG_LEN
+    assert len(plaintext) <= MAX_MSG_LEN
     stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN, seek=STREAM_SEEK)
     ciphertext_msg = xor(plaintext, stream[: len(plaintext)])
     msg_tag = universal_hash(key, ciphertext_msg, MSG_AUTH_SEEK)
@@ -52,7 +55,10 @@ def decrypt(
     ciphertext: bytes,
 ) -> bytes:
     assert len(nonce) <= MAX_NONCE_LEN
+    assert len(aad) <= MAX_MSG_LEN
+    assert len(ciphertext) >= TAG_LEN
     plaintext_len = len(ciphertext) - TAG_LEN
+    assert plaintext_len <= MAX_MSG_LEN
     ciphertext_msg = ciphertext[:plaintext_len]
     stream = blake3(nonce, key=key).digest(length=len(ciphertext), seek=STREAM_SEEK)
     msg_tag = universal_hash(key, ciphertext_msg, MSG_AUTH_SEEK)
