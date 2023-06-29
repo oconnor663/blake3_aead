@@ -11,11 +11,11 @@ hash function*
 
 ## Nice-to-have features
 
-- Nonces can be up to 64 bytes.
-- Relatively large maximum message and AAD lengths, 2<sup>62</sup> and
-  2<sup>62</sup>-1 bytes respectively
-- The message and associated data can be processed in in parallel, in one pass
-  each, without knowing their lengths in advance.
+- Large nonces (up to 64 bytes)
+- Long messages and AAD (up to 2<sup>62</sup> bytes)
+- The message and the AAD can be processed in in parallel, in one pass each,
+  without knowing their lengths in advance. AAD processing doesn't depend on
+  the nonce.
 - Truncating the auth tag to N bits retains the expected O(2<sup>N</sup>) bits
   of security. (Correct?)
 - A compact implementation can work directly with the BLAKE3 compression
@@ -94,24 +94,25 @@ The `initial_seek` parameter is used for domain separation below.
 ### Encrypt
 
 ```python
-MSG_SEEK = 2**63
-AAD_SEEK = 2**63 + 2**62
+MSG_AUTH_SEEK = 0
+AAD_AUTH_SEEK = 2**62
+STREAM_SEEK = 2**63
 
 def encrypt(key, nonce, aad, plaintext):
-    stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN)
+    stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN, seek=STREAM_SEEK)
     ciphertext_msg = xor(plaintext, stream[: len(plaintext)])
-    msg_tag = universal_hash(key, ciphertext_msg, MSG_SEEK)
-    aad_tag = universal_hash(key, aad, AAD_SEEK)
+    msg_tag = universal_hash(key, ciphertext_msg, MSG_AUTH_SEEK)
+    aad_tag = universal_hash(key, aad, AAD_AUTH_SEEK)
     tag = xor(stream[len(plaintext) :], xor(msg_tag, aad_tag))
     return ciphertext_msg + tag
 ```
 
 The BLAKE3 XOF supports up to 2<sup>64</sup>-1 output bytes. The output space
-is divided into three parts, with the key stream starting at offset 0, the
-message authenticator starting at offset 2<sup>63</sup>, and the associated
-data authenticator starting at offset 2<sup>63</sup>+2<sup>62</sup>. The stream
-cipher produces 16 extra bytes of output beyond the message length, and those
-extra bytes are used to mask the combined authentication tag.
+is divided into three parts, with the message authenticator starting at offset
+0, the AD authenticator starting at offset 2<sup>62</sup>, and the key stream
+starting at offset 2<sup>63</sup>. The stream cipher produces 16 extra bytes of
+output beyond the message length, and those extra bytes are used to mask the
+combined authentication tag.
 
 ### Decrypt
 
@@ -119,9 +120,9 @@ extra bytes are used to mask the combined authentication tag.
 def decrypt(key, nonce, aad, ciphertext):
     plaintext_len = len(ciphertext) - TAG_LEN
     ciphertext_msg = ciphertext[:plaintext_len]
-    stream = blake3(nonce, key=key).digest(length=len(ciphertext))
-    msg_tag = universal_hash(key, ciphertext_msg, MSG_SEEK)
-    aad_tag = universal_hash(key, aad, AAD_SEEK)
+    stream = blake3(nonce, key=key).digest(length=len(ciphertext), seek=STREAM_SEEK)
+    msg_tag = universal_hash(key, ciphertext_msg, MSG_AUTH_SEEK)
+    aad_tag = universal_hash(key, aad, AAD_AUTH_SEEK)
     expected_tag = xor(stream[plaintext_len:], xor(msg_tag, aad_tag))
     if not compare_digest(expected_tag, ciphertext[plaintext_len:]):
         raise ValueError("invalid ciphertext")
@@ -174,7 +175,29 @@ We could've divided the XOF output space into three approximately equal parts,
 rather than the current arrangement where half of it is allocated to the key
 stream. However, increasing the maximum message size from 2<sup>62</sup> bytes
 to ~2<sup>62.4</sup> bytes has almost no practical value, and it's nicer to
-keep the `MSG_SEEK` and `AAD_SEEK` constants simple.
+keep the `MSG_AUTH_SEEK` and `AAD_AUTH_SEEK` constants simple.
+
+It doesn't matter very much which component uses seek 0 and which components
+use larger values, but choosing `MSG_AUTH_SEEK`=0 and `STREAM_SEEK`=2<sup>63</sup>
+has some minor benefits:
+
+- The length of the stream is the length of the message plus 16, so we want to
+  give the stream the largest block of output space.
+- The total number of XOF bytes supported by BLAKE3 is 2<sup>64</sup>-1, making
+  the upper half of the space 1 byte shorter than the lower half. Putting the
+  largest block of output space in the upper half lets us ignore this.
+- If a caller incorrectly reuses their cipher key and publishes BLAKE3 outputs
+  that the cipher considers secret, they'll probably publish outputs from seek
+  0. It's _slightly_ harder to exploit accidental leaks of the message
+  authenticator (which has pseudorandom input) than it is to exploit leaks of
+  the AD authenticator or the key stream, so it's preferable to put the message
+  authenticator at seek 0.
+- There are implementations of BLAKE3 that support the XOF but don't support
+  seeking. If the key stream was at seek 0, a programmer who only needed to get
+  decryption working might be tempted to ignore the auth tag, as a shortcut to
+  avoid switching to a different BLAKE3 implementation. Putting the keystream
+  higher in the output space removes this temptation.
+
 
 ### Nonce length
 

@@ -6,8 +6,10 @@ use constant_time_eq::constant_time_eq;
 pub const TAG_LEN: usize = 16;
 const BLOCK_LEN: usize = 64;
 const MAX_NONCE_LEN: usize = BLOCK_LEN;
-const MSG_SEEK: u64 = 1 << 63;
-const AAD_SEEK: u64 = (1 << 63) + (1 << 62);
+
+const MSG_AUTH_SEEK: u64 = 0;
+const AAD_AUTH_SEEK: u64 = 1 << 62;
+const STREAM_SEEK: u64 = 1 << 63;
 
 fn xor(dest: &mut [u8], other: &[u8]) {
     assert_eq!(dest.len(), other.len());
@@ -19,7 +21,9 @@ fn xor(dest: &mut [u8], other: &[u8]) {
 // This will eventually be supported directly in the public blake3 API, with a high-efficiency
 // implementation. In the meantime, this is a low-efficiency helper with a reasonably similar
 // signature.
-fn xof_xor(output: &mut blake3::OutputReader, dest: &mut [u8]) {
+fn xof_xor(output: &mut blake3::OutputReader, seek: u64, dest: &mut [u8]) {
+    debug_assert_eq!(0, seek % BLOCK_LEN as u64);
+    output.set_position(seek);
     for dest_block in dest.chunks_mut(BLOCK_LEN) {
         let mut output_block = [0u8; BLOCK_LEN];
         output.fill(&mut output_block);
@@ -35,8 +39,8 @@ pub fn universal_hash(key: &[u8; KEY_LEN], message: &[u8], initial_seek: u64) ->
     let mut output = [0u8; TAG_LEN];
     for (block_index, block) in message.chunks(BLOCK_LEN).enumerate() {
         let mut xof = blake3::Hasher::new_keyed(key).update(block).finalize_xof();
-        xof.set_position(initial_seek + (block_index * BLOCK_LEN) as u64);
-        xof_xor(&mut xof, &mut output);
+        let seek = initial_seek + (block_index * BLOCK_LEN) as u64;
+        xof_xor(&mut xof, seek, &mut output);
     }
     return output;
 }
@@ -58,11 +62,11 @@ pub fn encrypt_in_place(
         plaintext_and_tag[plaintext_len + i] = 0;
     }
     let mut stream_output = blake3::Hasher::new_keyed(key).update(nonce).finalize_xof();
-    xof_xor(&mut stream_output, plaintext_and_tag);
+    xof_xor(&mut stream_output, STREAM_SEEK, plaintext_and_tag);
     let (plaintext, tag) = plaintext_and_tag.split_at_mut(plaintext_len);
-    let msg_tag = universal_hash(key, plaintext, MSG_SEEK);
+    let msg_tag = universal_hash(key, plaintext, MSG_AUTH_SEEK);
     xor(tag, &msg_tag);
-    let aad_tag = universal_hash(key, aad, AAD_SEEK);
+    let aad_tag = universal_hash(key, aad, AAD_AUTH_SEEK);
     xor(tag, &aad_tag);
 }
 
@@ -87,11 +91,11 @@ pub fn decrypt_in_place<'msg>(
         return Err(());
     }
     let plaintext_len = ciphertext.len() - TAG_LEN;
-    let mut tag = universal_hash(key, &ciphertext[..plaintext_len], MSG_SEEK);
-    let aad_tag = universal_hash(key, aad, AAD_SEEK);
+    let mut tag = universal_hash(key, &ciphertext[..plaintext_len], MSG_AUTH_SEEK);
+    let aad_tag = universal_hash(key, aad, AAD_AUTH_SEEK);
     xor(&mut tag, &aad_tag);
     let mut stream_output = blake3::Hasher::new_keyed(key).update(nonce).finalize_xof();
-    xof_xor(&mut stream_output, ciphertext);
+    xof_xor(&mut stream_output, STREAM_SEEK, ciphertext);
     if !constant_time_eq(&tag, &ciphertext[plaintext_len..]) {
         // Invalid plaintext. Clear the whole buffer to be safe.
         for i in 0..ciphertext.len() {

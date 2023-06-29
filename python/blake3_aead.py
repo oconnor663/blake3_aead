@@ -4,8 +4,10 @@ from hmac import compare_digest
 TAG_LEN = 16
 BLOCK_LEN = blake3.block_size
 MAX_NONCE_LEN = BLOCK_LEN
-MSG_SEEK = 2**63
-AAD_SEEK = 2**63 + 2**62
+
+MSG_AUTH_SEEK = 0
+AAD_AUTH_SEEK = 2**62
+STREAM_SEEK = 2**63
 
 
 def xor(a: bytes, b: bytes):
@@ -35,10 +37,10 @@ def encrypt(
     plaintext: bytes,
 ) -> bytes:
     assert len(nonce) <= MAX_NONCE_LEN
-    stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN)
+    stream = blake3(nonce, key=key).digest(length=len(plaintext) + TAG_LEN, seek=STREAM_SEEK)
     ciphertext_msg = xor(plaintext, stream[: len(plaintext)])
-    msg_tag = universal_hash(key, ciphertext_msg, MSG_SEEK)
-    aad_tag = universal_hash(key, aad, AAD_SEEK)
+    msg_tag = universal_hash(key, ciphertext_msg, MSG_AUTH_SEEK)
+    aad_tag = universal_hash(key, aad, AAD_AUTH_SEEK)
     tag = xor(stream[len(plaintext) :], xor(msg_tag, aad_tag))
     return ciphertext_msg + tag
 
@@ -52,9 +54,9 @@ def decrypt(
     assert len(nonce) <= MAX_NONCE_LEN
     plaintext_len = len(ciphertext) - TAG_LEN
     ciphertext_msg = ciphertext[:plaintext_len]
-    stream = blake3(nonce, key=key).digest(length=len(ciphertext))
-    msg_tag = universal_hash(key, ciphertext_msg, MSG_SEEK)
-    aad_tag = universal_hash(key, aad, AAD_SEEK)
+    stream = blake3(nonce, key=key).digest(length=len(ciphertext), seek=STREAM_SEEK)
+    msg_tag = universal_hash(key, ciphertext_msg, MSG_AUTH_SEEK)
+    aad_tag = universal_hash(key, aad, AAD_AUTH_SEEK)
     expected_tag = xor(stream[plaintext_len:], xor(msg_tag, aad_tag))
     if not compare_digest(expected_tag, ciphertext[plaintext_len:]):
         raise ValueError("invalid ciphertext")
