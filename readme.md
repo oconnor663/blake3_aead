@@ -110,7 +110,7 @@ def encrypt(key, nonce, aad, plaintext):
 The BLAKE3 XOF supports up to 2<sup>64</sup>-1 output bytes. The output space
 is divided into three parts, with the message authenticator starting at offset
 0, the AD authenticator starting at offset 2<sup>62</sup>, and the keystream
-starting at offset 2<sup>63</sup>. The stream cipher produces 16 extra bytes of
+starting at offset 2<sup>63</sup>. The keystream produces 16 extra bytes of
 output beyond the message length, and those extra bytes are used to mask the
 combined authentication tag.
 
@@ -193,7 +193,7 @@ has some minor benefits:
   the AD authenticator or the keystream, so it's preferable to put the message
   authenticator at seek 0.
 - There are implementations of BLAKE3 that support the XOF but don't support
-  seeking. If the keystream was at seek 0, a programmer who only needed to get
+  seeking. If the keystream were at seek 0, a programmer who only needed to get
   decryption working might be tempted to ignore the auth tag, as a shortcut to
   avoid switching to a different BLAKE3 implementation. Putting the keystream
   higher in the output space removes this temptation.
