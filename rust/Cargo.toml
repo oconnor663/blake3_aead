@@ -14,7 +14,8 @@ default = ["std"]
 std = ["blake3/std"]
 
 [dependencies]
-blake3 = "1.4.0"
+blake3 = { version = "1", path = "../../BLAKE3" }
+blake3_guts = { path = "../../BLAKE3/rust/guts" }
 constant_time_eq = "0.2.5"
 
 [dev-dependencies]
