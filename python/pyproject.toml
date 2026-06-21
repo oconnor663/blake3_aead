@@ -1,2 +1,15 @@
-[tool.black]
+[project]
+name = "blake3_aead"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "blake3>=1.0.8",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.ruff]
 line-length = 100  # match rustfmt
